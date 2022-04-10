@@ -10,7 +10,7 @@ use wait_timeout::ChildExt;
 fn main() -> std::io::Result<()> { // test auth key YETTBDYZGYSDBGULZNUKXHSTLWPKDYBJ
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 3 {
-        println!("Missing bind address argument (e.g. 127.0.0.1:3216) and auth key (e.g. \"my_secret_key\")");
+        println!("Missing bind address argument (e.g. 127.0.0.1:3216) and auth key (e.g. \"YETTBDYZGYSDBGULZNUKXHSTLWPKDYBJ\")");
         return Ok(());
     }
     let bind_addr = &args[1];
