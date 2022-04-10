@@ -1,0 +1,1 @@
+An attempt at a Rust implementation of a simple instant messaging service.
