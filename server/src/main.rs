@@ -1,11 +1,9 @@
-use std::env;
-use std::io::{BufRead, BufReader, BufWriter, Read, Write};
+use std::{env, panic};
+use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
-use std::process::Command;
 
 use fancy_regex::Regex;
 use threadpool::ThreadPool;
-use wait_timeout::ChildExt;
 
 fn main() -> std::io::Result<()> { // test auth key YETTBDYZGYSDBGULZNUKXHSTLWPKDYBJ
     let args: Vec<String> = std::env::args().collect();
@@ -27,6 +25,9 @@ fn main() -> std::io::Result<()> { // test auth key YETTBDYZGYSDBGULZNUKXHSTLWPK
     }
     let listener = TcpListener::bind(bind_addr)?;
     println!("Listening on {}", bind_addr);
+    panic::set_hook(Box::new(|info| {
+        println!("{}", info);
+    }));
     let pool = ThreadPool::new(4);
     for stream in listener.incoming() {
         let stream = stream.unwrap();
@@ -41,28 +42,26 @@ fn handle_client(mut stream: TcpStream, auth_key: &str) {
     stream.set_read_timeout(Some(std::time::Duration::from_secs(1))).unwrap();
     let mut reader = BufReader::new(stream.try_clone().unwrap());
     println!("New connection from {}", stream.peer_addr().unwrap());
-    if await_auth(&mut stream, &mut reader, auth_key) {
-        stream.set_read_timeout(None).unwrap();
-    }
+    await_auth(&mut stream, &mut reader, auth_key);
+    stream.set_read_timeout(None).unwrap();
+    println!("Proceeding with connection from {}", stream.peer_addr().unwrap());
 }
 
-fn await_auth(stream: &mut TcpStream, reader: &mut BufReader<TcpStream>, server_key: &str) -> bool {
+fn await_auth(stream: &mut TcpStream, reader: &mut BufReader<TcpStream>, server_key: &str) {
     let mut buffer = String::new();
     match reader.read_line(&mut buffer) {
-        Ok(x) => {
-            return if buffer.trim() == server_key {
+        Ok(_x) => {
+            if buffer.trim() == server_key {
                 println!("Authenticated connection from {}", stream.peer_addr().unwrap());
                 stream.write(b"Authentication successful\n").unwrap();
-                true
             } else {
                 println!("Authentication failed from {}", stream.peer_addr().unwrap());
                 stream.write(b"Authentication failed\n").unwrap();
-                false
+                panic!("Authentication failed");
             };
         }
         Err(_) => {
             println!("Read timeout for connection {}", stream.peer_addr().unwrap());
         }
     };
-    true
 }
