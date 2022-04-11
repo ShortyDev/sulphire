@@ -1,9 +1,7 @@
 use std::{env, panic};
 use std::borrow::{Borrow, BorrowMut};
-use std::cell::RefCell;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
-use std::ops::Index;
 use std::sync::Mutex;
 
 use fancy_regex::Regex;
@@ -101,7 +99,7 @@ fn await_sub_channels(stream: &mut TcpStream, reader: &mut BufReader<TcpStream>)
     let mut buffer = String::new();
     match reader.read_line(&mut buffer) {
         Ok(_x) => {
-            let mut channels = buffer.trim().split(",");
+            let channels = buffer.trim().split(",");
             let mut subscribers = Vec::new();
             for channel in channels {
                 if channel.is_empty() {
