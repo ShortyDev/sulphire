@@ -14,6 +14,11 @@ lazy_static! {
     static ref SUBSCRIBERS: Mutex<Vec<Subscriber>> = Mutex::new(Vec::new());
 }
 
+/*
+ todo add proper timeout
+ todo better subscriber management
+ */
+
 fn main() -> std::io::Result<()> { // test auth key YETTBDYZGYSDBGULZNUKXHSTLWPKDYBJ
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 3 {
