@@ -1,9 +1,18 @@
 use std::{env, panic};
+use std::borrow::{Borrow, BorrowMut};
+use std::cell::RefCell;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
+use std::ops::Index;
+use std::sync::Mutex;
 
 use fancy_regex::Regex;
+use lazy_static::lazy_static;
 use threadpool::ThreadPool;
+
+lazy_static! {
+    static ref SUBSCRIBERS: Mutex<Vec<Subscriber>> = Mutex::new(Vec::new());
+}
 
 fn main() -> std::io::Result<()> { // test auth key YETTBDYZGYSDBGULZNUKXHSTLWPKDYBJ
     let args: Vec<String> = std::env::args().collect();
@@ -39,12 +48,29 @@ fn main() -> std::io::Result<()> { // test auth key YETTBDYZGYSDBGULZNUKXHSTLWPK
 }
 
 fn handle_client(mut stream: TcpStream, auth_key: &str) {
-    stream.set_read_timeout(Some(std::time::Duration::from_secs(1))).unwrap();
     let mut reader = BufReader::new(stream.try_clone().unwrap());
     println!("New connection from {}", stream.peer_addr().unwrap());
     await_auth(&mut stream, &mut reader, auth_key);
-    stream.set_read_timeout(None).unwrap();
+    await_sub_channels(&mut stream, &mut reader);
     println!("Proceeding with connection from {}", stream.peer_addr().unwrap());
+    loop {
+        let mut buffer = String::new();
+        reader.read_line(&mut buffer)
+            .expect("Failed to read from stream");
+        if buffer.is_empty() {
+            let remove = SUBSCRIBERS.lock().unwrap().iter_mut().position(|sub| sub.stream.borrow_mut().peer_addr().unwrap() == stream.peer_addr().unwrap()).unwrap();
+            SUBSCRIBERS.lock().unwrap().remove(remove);
+            break;
+        }
+        let channel = buffer.split(" ").nth(0).unwrap();
+        let message = buffer.split(" ").skip(1).collect::<Vec<&str>>().join(" ");
+        for subscriber in SUBSCRIBERS.lock().unwrap().iter_mut() {
+            if subscriber.channel.trim() == channel.trim() {
+                let send = channel.borrow().to_string() + " " + message.borrow();
+                subscriber.stream.write(send.as_bytes()).expect("Failed to write to stream");
+            }
+        }
+    }
 }
 
 fn await_auth(stream: &mut TcpStream, reader: &mut BufReader<TcpStream>, server_key: &str) {
@@ -53,10 +79,10 @@ fn await_auth(stream: &mut TcpStream, reader: &mut BufReader<TcpStream>, server_
         Ok(_x) => {
             if buffer.trim() == server_key {
                 println!("Authenticated connection from {}", stream.peer_addr().unwrap());
-                stream.write(b"Authentication successful\n").unwrap();
+                stream.write(b"Authentication successful\r\n").unwrap();
             } else {
                 println!("Authentication failed from {}", stream.peer_addr().unwrap());
-                stream.write(b"Authentication failed\n").unwrap();
+                stream.write(b"Authentication failed\r\n").unwrap();
                 panic!("Authentication failed");
             };
         }
@@ -64,4 +90,32 @@ fn await_auth(stream: &mut TcpStream, reader: &mut BufReader<TcpStream>, server_
             println!("Read timeout for connection {}", stream.peer_addr().unwrap());
         }
     };
+}
+
+fn await_sub_channels(stream: &mut TcpStream, reader: &mut BufReader<TcpStream>) {
+    let mut buffer = String::new();
+    match reader.read_line(&mut buffer) {
+        Ok(_x) => {
+            let mut channels = buffer.trim().split(",");
+            let mut subscribers = Vec::new();
+            for channel in channels {
+                if channel.is_empty() {
+                    continue;
+                }
+                subscribers.push(Subscriber {
+                    channel: channel.to_string(),
+                    stream: stream.try_clone().unwrap(),
+                });
+            }
+            SUBSCRIBERS.lock().unwrap().append(&mut subscribers);
+        }
+        Err(_) => {
+            println!("Read timeout for connection {}", stream.peer_addr().unwrap());
+        }
+    };
+}
+
+pub(crate) struct Subscriber {
+    pub(crate) stream: TcpStream,
+    pub(crate) channel: String,
 }
