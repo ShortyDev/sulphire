@@ -7,5 +7,4 @@ edition = "2021"
 
 [dependencies]
 threadpool = "1.8.1"
-wait-timeout = "0.2.0"
 fancy-regex = "0.8.0"
