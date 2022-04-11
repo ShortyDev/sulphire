@@ -23,8 +23,8 @@ fn main() -> std::io::Result<()> { // test auth key YETTBDYZGYSDBGULZNUKXHSTLWPK
         println!("Auth key is too short");
         return Ok(());
     }
-    let listener = TcpListener::bind(bind_addr)?;
-    println!("Listening on {}", bind_addr);
+    let listener = TcpListener::bind(bind_addr.replace("docker", "0.0.0.0:3216"))?;
+    println!("Listening on {}", listener.local_addr()?);
     panic::set_hook(Box::new(|info| {
         println!("{}", info);
     }));
