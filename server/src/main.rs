@@ -17,7 +17,7 @@ lazy_static! {
  todo better subscriber management
  */
 
-fn main() -> std::io::Result<()> { // test auth key YETTBDYZGYSDBGULZNUKXHSTLWPKDYBJ
+fn main() -> std::io::Result<()> {
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 3 {
         println!("Missing bind address argument (e.g. 127.0.0.1:3216) and auth key (e.g. \"YETTBDYZGYSDBGULZNUKXHSTLWPKDYBJ\")");
@@ -67,11 +67,9 @@ fn handle_client(mut stream: TcpStream, auth_key: &str) {
         }
         let channel = buffer.split(" ").nth(0).unwrap();
         let message = buffer.split(" ").skip(1).collect::<Vec<&str>>().join(" ");
-        for subscriber in SUBSCRIBERS.lock().unwrap().iter_mut() {
-            if subscriber.channel.trim() == channel.trim() {
-                let send = channel.borrow().to_string() + " " + message.borrow();
-                subscriber.stream.write(send.as_bytes()).expect("Failed to write to stream");
-            }
+        for subscriber in SUBSCRIBERS.lock().unwrap().iter_mut().filter(|sub| sub.channel.eq(&channel)) {
+            let send = channel.borrow().to_string() + " " + message.borrow();
+            subscriber.stream.write(send.as_bytes()).expect("Failed to write to stream");
         }
     }
 }
