@@ -1,6 +1,5 @@
-use std::borrow::BorrowMut;
 use std::env;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
 
 fn main() -> std::io::Result<()> { // client for performance testing purposes only
