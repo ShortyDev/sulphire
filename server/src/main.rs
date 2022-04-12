@@ -1,5 +1,5 @@
 use std::{env, panic};
-use std::borrow::{Borrow, BorrowMut};
+use std::borrow::Borrow;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::Mutex;
@@ -58,18 +58,27 @@ fn handle_client(mut stream: TcpStream, auth_key: &str) {
     println!("Proceeding with connection from {}", stream.peer_addr().unwrap());
     loop {
         let mut buffer = String::new();
-        reader.read_line(&mut buffer)
-            .expect("Failed to read from stream");
-        if buffer.is_empty() {
-            let remove = SUBSCRIBERS.lock().unwrap().iter_mut().position(|sub| sub.stream.borrow_mut().peer_addr().unwrap() == stream.peer_addr().unwrap()).unwrap();
-            SUBSCRIBERS.lock().unwrap().remove(remove);
-            break;
-        }
-        let channel = buffer.split(" ").nth(0).unwrap();
-        let message = buffer.split(" ").skip(1).collect::<Vec<&str>>().join(" ");
-        for subscriber in SUBSCRIBERS.lock().unwrap().iter_mut().filter(|sub| sub.channel.eq(&channel)) {
-            let send = channel.borrow().to_string() + " " + message.borrow();
-            subscriber.stream.write(send.as_bytes()).expect("Failed to write to stream");
+        match reader.read_line(&mut buffer) {
+            Err(_e) => {
+                println!("Connection closed by {}", stream.peer_addr().unwrap());
+                break;
+            }
+            _ => {
+                if buffer.trim().is_empty() {
+                    break;
+                }
+                let channel = buffer.split(" ").nth(0).unwrap();
+                let message = buffer.split(" ").skip(1).collect::<Vec<&str>>().join(" ");
+                for subscriber in SUBSCRIBERS.lock().unwrap().iter_mut().filter(|sub| sub.channel.eq(&channel)) {
+                    let send = channel.borrow().to_string() + " " + message.borrow();
+                    match subscriber.stream.write(send.as_bytes()) {
+                        Ok(_) => (),
+                        Err(_e) => {
+                            subscriber.stream.shutdown(std::net::Shutdown::Both).unwrap();
+                        }
+                    }
+                }
+            }
         }
     }
 }
