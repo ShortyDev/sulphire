@@ -1,21 +1,20 @@
 use std::{env, panic};
 use std::borrow::Borrow;
 use std::io::{BufRead, BufReader, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::{Shutdown, TcpListener, TcpStream};
 use std::sync::Mutex;
+use std::thread::sleep;
+use std::time::Duration;
 
 use fancy_regex::Regex;
 use lazy_static::lazy_static;
 use threadpool::ThreadPool;
+use uuid::Uuid;
 
 lazy_static! {
     static ref SUBSCRIBERS: Mutex<Vec<Subscriber>> = Mutex::new(Vec::new());
+    static ref CLOSED: Mutex<Vec<Subscriber>> = Mutex::new(Vec::new());
 }
-
-/*
- todo add proper timeout
- todo better subscriber management
- */
 
 fn main() -> std::io::Result<()> {
     let args: Vec<String> = std::env::args().collect();
@@ -41,6 +40,12 @@ fn main() -> std::io::Result<()> {
         println!("{}", info);
     }));
     let pool = ThreadPool::new(4);
+    pool.execute(|| {
+        loop {
+            clean();
+            sleep(Duration::from_secs(10));
+        }
+    });
     for stream in listener.incoming() {
         let stream = stream.unwrap();
         pool.execute(|| {
@@ -48,6 +53,14 @@ fn main() -> std::io::Result<()> {
         });
     }
     Ok(())
+}
+
+fn clean() {
+    let dropped = CLOSED.lock().unwrap().clone();
+    CLOSED.lock().unwrap().clear();
+    SUBSCRIBERS.lock().unwrap().retain(|subscriber| {
+        return !dropped.contains(subscriber);
+    })
 }
 
 fn handle_client(mut stream: TcpStream, auth_key: &str) {
@@ -74,7 +87,10 @@ fn handle_client(mut stream: TcpStream, auth_key: &str) {
                     match subscriber.stream.write(send.as_bytes()) {
                         Ok(_) => (),
                         Err(_e) => {
-                            subscriber.stream.shutdown(std::net::Shutdown::Both).unwrap();
+                            subscriber.stream.shutdown(Shutdown::Both).unwrap();
+                            subscriber.channel.clear();
+                            CLOSED.lock().unwrap().push(subscriber.clone());
+                            println!("Connection closed by {}", subscriber.stream.peer_addr().unwrap());
                         }
                     }
                 }
@@ -113,6 +129,7 @@ fn await_sub_channels(stream: &mut TcpStream, reader: &mut BufReader<TcpStream>)
                     continue;
                 }
                 subscribers.push(Subscriber {
+                    id: Uuid::new_v4(),
                     channel: channel.to_string(),
                     stream: stream.try_clone().unwrap(),
                 });
@@ -126,6 +143,23 @@ fn await_sub_channels(stream: &mut TcpStream, reader: &mut BufReader<TcpStream>)
 }
 
 pub(crate) struct Subscriber {
+    pub(crate) id: Uuid,
     pub(crate) stream: TcpStream,
     pub(crate) channel: String,
+}
+
+impl PartialEq for Subscriber {
+    fn eq(&self, other: &Subscriber) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Clone for Subscriber {
+    fn clone(&self) -> Subscriber {
+        Subscriber {
+            id: self.id,
+            stream: self.stream.try_clone().unwrap(),
+            channel: self.channel.clone(),
+        }
+    }
 }

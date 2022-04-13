@@ -9,3 +9,4 @@ edition = "2021"
 threadpool = "1.8.1"
 fancy-regex = "0.8.0"
 lazy_static = "1.4.0"
+uuid = { version = "0.8", features = ["v4"] }
