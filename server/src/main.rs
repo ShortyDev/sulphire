@@ -20,7 +20,7 @@ lazy_static! {
 fn main() -> std::io::Result<()> {
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 3 {
-        println!("Missing bind address argument (e.g. 127.0.0.1:3216) and auth key (e.g. \"YETTBDYZGYSDBGULZNUKXHSTLWPKDYBJ\")");
+        println!("Missing bind address argument (e.g. 127.0.0.1:3216 or default) and auth key (e.g. \"YETTBDYZGYSDBGULZNUKXHSTLWPKDYBJ\")");
         return Ok(());
     }
     let bind_addr = &args[1];
@@ -35,7 +35,7 @@ fn main() -> std::io::Result<()> {
         println!("Auth key is too short");
         return Ok(());
     }
-    let listener = TcpListener::bind(bind_addr.replace("docker", "0.0.0.0:3216"))?;
+    let listener = TcpListener::bind(bind_addr.replace("default", "0.0.0.0:3216"))?;
     println!("Listening on {}", listener.local_addr()?);
     panic::set_hook(Box::new(|info| {
         println!("{}", info);
